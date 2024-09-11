@@ -1,73 +1,36 @@
 <?php
-
 namespace App\Http\Controllers\api;
-
-use App\Models\User;
 use App\Helpers\ApiResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rules;
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\LoginRequest;
+use App\Http\Requests\RegisterRequest;
+use App\Services\AuthService;
+use Illuminate\Support\Facades\Request;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    protected $authService;
+    public function __construct(AuthService $authService)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:' . User::class],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ], [], [
-            'name' => 'Name',
-            'email' => 'Email',
-            'password' => 'Password',
-        ]);
-
-        if ($validator->fails()) {
-            return ApiResponse::sendResponse(422, 'Register Validation Errors', $validator->messages()->all());
-        }
-
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
-        $data['token'] = $user->createToken('APIcourse')->plainTextToken;
-        $data['name'] = $user->name;
-        $data['email'] = $user->email;
-
+        $this->authService = $authService;
+    }
+    public function register(RegisterRequest $request)
+    {
+        $data = $this->authService->register($request->validated());
         return ApiResponse::sendResponse(201, 'User Account Created Successfully', $data);
     }
-
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'email' => ['required', 'string', 'email'],
-            'password' => ['required'],
-        ], [], [
-            'email' => __('lang.email'),
-            'password' => __('lang.password'),
-        ]);
-
-        if ($validator->fails()) {
-            return ApiResponse::sendResponse(422, 'Login Validation Errors', $validator->errors());
-        }
-
-        if (Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
-            $user = Auth::user();
-            $data['token'] =  $user->createToken('MyAuthApp')->plainTextToken;
-            $data['name'] =  $user->name;
-            $data['email'] =  $user->email;
+        $data = $this->authService->login($request->validated());
+        if ($data) {
             return ApiResponse::sendResponse(200, 'Login Successfully', $data);
         } else {
-            return ApiResponse::sendResponse(401, 'These credentials doesn\'t exist', null);
+            return ApiResponse::sendResponse(401, 'These credentials don\'t exist', null);
         }
     }
-    public function logout(Request $request){
-        $request->user()->currentAccessToken()->delete();
+    public function logout(Request $request)
+    {
+        $this->authService->logout($request->user());
         return ApiResponse::sendResponse(204, 'Logout Successfully', []);
     }
-
 }
